@@ -1,24 +1,16 @@
 {
-  "name": "esp-32-server",
+  "name": "esp32-led-control-server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend + frontend for controlling ESP32-S3 LED devices",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/unityua/ESP-32-Server.git"
+  "engines": {
+    "node": ">=18"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/unityua/ESP-32-Server/issues"
-  },
-  "homepage": "https://github.com/unityua/ESP-32-Server#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
   }
 }
