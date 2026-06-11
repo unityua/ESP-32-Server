@@ -8,7 +8,7 @@
     "gen:secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     "gen:seed": "node scripts/make-seed.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": { "node": "22.x" },
   "dependencies": {
     "express": "^4.19.2",
     "helmet": "^7.1.0",
