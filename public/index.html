@@ -76,7 +76,7 @@
 
 <!-- LOGIN -->
 <div class="card" id="loginCard">
-  <div class="brand">// esp32-s3 node</div>
+  <div class="brand">// esp32-c3 node</div>
   <h1>Device Access</h1>
   <label for="u">Username</label>
   <input id="u" autocomplete="username" placeholder="alice" />
@@ -112,6 +112,8 @@
 <script>
 const API = ''; // same origin
 let token = null, poll = null;
+// The token lives only in this JS variable — never in localStorage or
+// cookies. Closing the tab logs you out. That is intentional.
 
 const $ = id => document.getElementById(id);
 
@@ -119,6 +121,7 @@ async function api(path, opts={}){
   opts.headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
   if(token) opts.headers.Authorization = 'Bearer '+token;
   const r = await fetch(API+path, opts);
+  if(r.status === 401 && token){ logout(); throw new Error('session expired'); }
   if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error || r.status);
   return r.json();
 }
@@ -129,6 +132,7 @@ async function login(){
     const data = await api('/api/login',{method:'POST',
       body:JSON.stringify({username:$('u').value.trim(),password:$('p').value})});
     token = data.token;
+    $('p').value = '';
     $('loginCard').classList.add('hidden');
     $('dashCard').classList.remove('hidden');
     $('hello').textContent = data.username + "'s Device";
@@ -165,11 +169,14 @@ async function setLed(on){
   catch(e){ $('dashErr').textContent = e.message; }
 }
 
-function logout(){
+async function logout(){
+  try{ if(token) await fetch('/api/logout',{method:'POST',
+    headers:{Authorization:'Bearer '+token}}); }catch(e){}
   token=null; clearInterval(poll);
   $('dashCard').classList.add('hidden');
   $('loginCard').classList.remove('hidden');
   $('u').value=''; $('p').value='';
+  $('dashErr').textContent='';
 }
 
 $('loginBtn').onclick = login;
