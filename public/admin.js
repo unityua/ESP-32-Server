@@ -76,12 +76,20 @@ function renderUsers(list) {
 
 async function loadUsers() {
   $('dashErr').textContent = '';
+  const btn = $('refreshBtn');
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
   try {
     const data = await api('/api/admin/users');
     $('count').textContent = '(' + data.count + ')';
     renderUsers(data.users);
   } catch (e) {
     $('dashErr').textContent = e.message;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      // Remove class after animation completes so it can re-trigger
+      btn.addEventListener('animationend', () => btn.classList.remove('spinning'), { once: true });
+    }
   }
 }
 
@@ -157,3 +165,4 @@ $('genPw').onclick = genPassword;
 $('copyBtn').onclick = copyResult;
 $('dismissBtn').onclick = () => $('resultPanel').classList.add('hidden');
 $('logoutBtn').onclick = logout;
+$('refreshBtn').onclick = loadUsers;
