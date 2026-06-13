@@ -31,6 +31,15 @@ const SESSION_TTL = 12 * 60 * 60 * 1000;     // 12h
 const DEVICE_TS_WINDOW = 60;                 // seconds of allowed clock skew
 const NONCE_TTL = 5 * 60 * 1000;             // remember nonces for 5 min
 
+// ── Admin config ──────────────────────────────────────────────────
+// The admin is NOT a row in the users table — it's a separate account
+// gated by the ADMIN_PASSWORD env var, so it can never own/control a
+// device and never collides with a registered user. If ADMIN_PASSWORD
+// is unset, the entire admin surface is disabled (fail closed).
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const ADMIN_SESSION_TTL = 60 * 60 * 1000;    // 1h — admin sessions are short-lived
+const adminSessions = new Map();              // sha256(token) -> expiry (in-memory only)
+
 // Render sits behind a proxy/load balancer
 app.set('trust proxy', 1);
 
@@ -154,6 +163,110 @@ app.post('/api/led', authUser, (req, res) => {
   res.json({ deviceId: user.device_id, led: on });
 });
 
+// ── Admin: auth middleware ────────────────────────────────────────
+function authAdmin(req, res, next) {
+  if (!ADMIN_PASSWORD) return res.status(404).json({ error: 'not found' });
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (!token) return res.status(401).json({ error: 'unauthorized' });
+  const exp = adminSessions.get(sha256(token));
+  if (!exp || exp < Date.now()) {
+    adminSessions.delete(sha256(token));
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  next();
+}
+
+// Tighter limiter for admin login: 5 attempts / 15 min / IP
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'too many attempts, try again later' },
+});
+
+// ── Admin: login ──────────────────────────────────────────────────
+app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
+  if (!ADMIN_PASSWORD) return res.status(404).json({ error: 'not found' });
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || password.length > 256) {
+    return res.status(400).json({ error: 'bad request' });
+  }
+  // constant-time compare against the configured password
+  if (!safeEqual(password, ADMIN_PASSWORD)) {
+    return res.status(401).json({ error: 'invalid credentials' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  adminSessions.set(sha256(token), Date.now() + ADMIN_SESSION_TTL);
+  res.json({ token });
+});
+
+app.post('/api/admin/logout', authAdmin, (req, res) => {
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  adminSessions.delete(sha256(token));
+  res.json({ ok: true });
+});
+
+// ── Admin: list all users + their devices ─────────────────────────
+app.get('/api/admin/users', authAdmin, (_req, res) => {
+  const rows = store.listUsersWithDevices().map((r) => ({
+    username: r.username,
+    deviceId: r.deviceId,
+    led: !!r.led,
+    online: r.lastSeen ? (Date.now() - r.lastSeen < 15000) : false,
+    lastSeen: r.lastSeen || 0,
+  }));
+  res.json({ count: rows.length, users: rows });
+});
+
+// ── Admin: register a new user (server generates device id+secret) ─
+// Admin supplies username + password. The server mints a unique device
+// id and a 256-bit secret, stores everything, and returns the secret
+// + password ONCE so the admin can record them. The secret is never
+// retrievable again (it's only used server-side for HMAC checks).
+const USERNAME_RE = /^[A-Za-z0-9_.-]{3,32}$/;
+
+function nextDeviceId() {
+  // esp-001, esp-002, ... find the lowest unused number
+  for (let i = 1; i < 100000; i++) {
+    const id = 'esp-' + String(i).padStart(3, '0');
+    if (!store.deviceExists(id)) return id;
+  }
+  // fallback: random suffix
+  return 'esp-' + crypto.randomBytes(3).toString('hex');
+}
+
+app.post('/api/admin/register', authAdmin, (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (typeof username !== 'string' || !USERNAME_RE.test(username)) {
+    return res.status(400).json({
+      error: 'username must be 3-32 chars: letters, digits, . _ -',
+    });
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'password must be 8-128 characters' });
+  }
+  if (store.getUser(username)) {
+    return res.status(409).json({ error: 'username already exists' });
+  }
+
+  const deviceId = nextDeviceId();
+  const deviceSecret = crypto.randomBytes(32).toString('hex');  // 64 hex chars
+  const passwordHash = bcrypt.hashSync(password, 12);
+
+  try {
+    store.createUserWithDevice({ username, passwordHash, deviceId, deviceSecret });
+  } catch (e) {
+    // UNIQUE constraint race or similar
+    return res.status(409).json({ error: 'could not create user (duplicate?)' });
+  }
+
+  // Returned ONCE. password echoed so admin can hand it to the user;
+  // deviceSecret must be flashed into that user's ESP32.
+  res.json({ username, password, deviceId, deviceSecret });
+});
+
 // ── Device-facing endpoint (HMAC-signed polling) ──────────────────
 // The ESP32 sends:
 //   X-Device-Id   : esp-001
@@ -165,6 +278,7 @@ const seenNonces = new Map(); // nonce -> expiry ts
 setInterval(() => {
   const now = Date.now();
   for (const [n, exp] of seenNonces) if (exp < now) seenNonces.delete(n);
+  for (const [h, exp] of adminSessions) if (exp < now) adminSessions.delete(h);
   store.purgeExpiredSessions();
 }, 60 * 1000);
 

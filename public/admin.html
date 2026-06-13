@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · ESP32 Fleet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- Login gate -->
+<div id="loginCard" class="card">
+  <div class="brand">ESP32 · ADMIN</div>
+  <h1>Admin sign-in</h1>
+  <label for="ap">Admin password</label>
+  <input id="ap" type="password" autocomplete="current-password" placeholder="••••••••">
+  <button id="loginBtn">Sign in</button>
+  <div id="loginErr" class="err"></div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashCard" class="card wide hidden">
+  <div class="dash-head">
+    <div>
+      <div class="brand">ESP32 · ADMIN</div>
+      <h1 id="title">Registered users</h1>
+    </div>
+    <button id="logoutBtn" class="ghost">Sign out</button>
+  </div>
+
+  <!-- Register new user -->
+  <div class="panel">
+    <div class="panel-title">Register new user</div>
+    <div class="reg-row">
+      <div>
+        <label for="nu">Username</label>
+        <input id="nu" type="text" placeholder="e.g. charlie" autocomplete="off">
+      </div>
+      <div>
+        <label for="np">Password</label>
+        <div class="pw-wrap">
+          <input id="np" type="text" placeholder="min 8 chars" autocomplete="off">
+          <button id="genPw" class="mini" type="button" title="Generate strong password">⟳</button>
+        </div>
+      </div>
+    </div>
+    <button id="regBtn">Create user + device</button>
+    <div id="regErr" class="err"></div>
+  </div>
+
+  <!-- Result of a registration (shown once) -->
+  <div id="resultPanel" class="panel result hidden">
+    <div class="panel-title">✅ Created — copy these now, the secret is shown only once</div>
+    <div class="kv"><span class="k">Username</span><span class="v" id="rUser"></span></div>
+    <div class="kv"><span class="k">Password</span><span class="v" id="rPass"></span></div>
+    <div class="kv"><span class="k">Device ID</span><span class="v" id="rId"></span></div>
+    <div class="kv"><span class="k">Device secret</span><span class="v mono-wrap" id="rSecret"></span></div>
+    <div class="kv"><span class="k">Provision line</span><span class="v mono-wrap" id="rProv"></span></div>
+    <button id="copyBtn" class="mini-wide">Copy all</button>
+    <button id="dismissBtn" class="ghost">Dismiss</button>
+  </div>
+
+  <!-- User list -->
+  <div class="panel">
+    <div class="panel-title">All users <span id="count" class="count"></span></div>
+    <div id="userList" class="user-list"></div>
+    <div id="dashErr" class="err"></div>
+  </div>
+</div>
+
+<script src="admin.js" defer></script>
+</body>
+</html>

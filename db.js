@@ -92,6 +92,36 @@ module.exports = {
   getDevice: (deviceId) =>
     db.prepare('SELECT * FROM devices WHERE device_id = ?').get(deviceId),
 
+  // ── Admin helpers ───────────────────────────────────────────────
+  // Full fleet view: one row per user joined to their device. The
+  // password hash and HMAC secret are deliberately NOT selected here —
+  // the admin dashboard shows operational data, not credential material.
+  listUsersWithDevices: () =>
+    db.prepare(`
+      SELECT u.username, u.device_id AS deviceId,
+             d.led, d.last_seen AS lastSeen, d.owner
+      FROM users u
+      LEFT JOIN devices d ON d.device_id = u.device_id
+      ORDER BY u.username
+    `).all(),
+
+  userCount: () => db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
+  deviceExists: (deviceId) =>
+    !!db.prepare('SELECT 1 FROM devices WHERE device_id = ?').get(deviceId),
+
+  // Atomically create a user + their device. Throws on duplicate
+  // username or deviceId (SQLite UNIQUE/PRIMARY KEY constraints), so
+  // the caller can surface a clean error instead of a half-write.
+  createUserWithDevice: ({ username, passwordHash, deviceId, deviceSecret }) => {
+    const tx = db.transaction(() => {
+      db.prepare('INSERT INTO users (username, password_hash, device_id) VALUES (?, ?, ?)')
+        .run(username, passwordHash, deviceId);
+      db.prepare('INSERT INTO devices (device_id, secret, owner) VALUES (?, ?, ?)')
+        .run(deviceId, deviceSecret, username);
+    });
+    tx();
+  },
+
   setLed: (deviceId, on) =>
     db.prepare('UPDATE devices SET led = ? WHERE device_id = ?')
       .run(on ? 1 : 0, deviceId),
