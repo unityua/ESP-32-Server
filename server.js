@@ -34,12 +34,33 @@ const NONCE_TTL = 5 * 60 * 1000;             // remember nonces for 5 min
 // Render sits behind a proxy/load balancer
 app.set('trust proxy', 1);
 
-app.use(helmet());
+// helmet's DEFAULT Content-Security-Policy is `script-src 'self'`, which
+// blocks inline <script> blocks — that's what silently killed the login
+// page. The UI's JS/CSS now live in external files (public/app.js,
+// public/styles.css), which 'self' allows, and we declare the policy
+// explicitly so nothing is left to defaults:
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],                              // our app.js
+      styleSrc: ["'self'", "https://fonts.googleapis.com"], // our styles.css + Google Fonts CSS
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],     // the font files themselves
+      connectSrc: ["'self'"],                              // fetch() to our own API
+      imgSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+}));
 app.use(express.json({ limit: '4kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.disable('x-powered-by');
 
-// Force HTTPS (Render forwards the original scheme in this header)
+// Force HTTPS BEFORE serving anything (Render forwards the original
+// scheme in this header). This used to sit after express.static, so
+// static files skipped the redirect.
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' &&
       req.headers['x-forwarded-proto'] === 'http') {
@@ -47,6 +68,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.disable('x-powered-by');
 
 // ── Helpers ───────────────────────────────────────────────────────
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -111,7 +135,8 @@ app.post('/api/logout', authUser, (req, res) => {
 // ── User-facing device control ────────────────────────────────────
 app.get('/api/me', authUser, (req, res) => {
   const user = store.getUser(req.username);
-  const dev = store.getDevice(user.device_id);
+  const dev = user && store.getDevice(user.device_id);
+  if (!user || !dev) return res.status(401).json({ error: 'unauthorized' });
   res.json({
     username: req.username,
     deviceId: user.device_id,
@@ -123,6 +148,7 @@ app.get('/api/me', authUser, (req, res) => {
 
 app.post('/api/led', authUser, (req, res) => {
   const user = store.getUser(req.username);
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
   const on = !!(req.body && req.body.on);
   store.setLed(user.device_id, on);
   res.json({ deviceId: user.device_id, led: on });
