@@ -47,7 +47,7 @@ async function login() {
   }
 }
 
-function paintLed(n, led) {
+function paintLed(n, led, pop) {
   const box = $('ledbox' + n), st = $('ledState' + n);
   st.textContent = led ? 'ON' : 'OFF';
   box.style.borderColor = led ? 'var(--green)' : 'var(--blue)';
@@ -55,6 +55,13 @@ function paintLed(n, led) {
     ? '0 0 32px rgba(61,220,145,.25) inset'
     : '0 0 32px rgba(77,139,255,.2) inset';
   st.style.color = led ? 'var(--green)' : 'var(--blue)';
+  if (pop) {
+    box.classList.remove('pop');
+    // force reflow so removing+adding the class restarts the animation
+    void box.offsetWidth;
+    box.classList.add('pop');
+    box.addEventListener('animationend', () => box.classList.remove('pop'), { once: true });
+  }
 }
 
 function paintOnline(online) {
@@ -77,8 +84,26 @@ async function refresh() {
 
 async function setLed(led, on) {
   $('dashErr').textContent = '';
-  try { await api('/api/led', {method:'POST', body: JSON.stringify({led, on})}); refresh(); }
-  catch(e) { $('dashErr').textContent = e.message; }
+  const box = $('ledbox' + led);
+  const btnOn = $('on' + led), btnOff = $('off' + led);
+
+  // Optimistic: flip display immediately so it feels instant
+  paintLed(led, on);
+  box.classList.add('pending');
+  btnOn.disabled = btnOff.disabled = true;
+
+  try {
+    await api('/api/led', {method:'POST', body: JSON.stringify({led, on})});
+    box.classList.remove('pending');
+    btnOn.disabled = btnOff.disabled = false;
+    paintLed(led, on, true);   // confirm pop
+    refresh();                  // sync any drift from the poll interval
+  } catch(e) {
+    box.classList.remove('pending');
+    btnOn.disabled = btnOff.disabled = false;
+    paintLed(led, !on);         // roll back optimistic update
+    $('dashErr').textContent = e.message;
+  }
 }
 
 async function logout() {

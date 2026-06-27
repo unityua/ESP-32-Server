@@ -77,12 +77,29 @@ button:disabled { cursor:not-allowed }
 .led-unit:first-of-type { margin-top:22px }
 .ledbox {
   margin:0 0 12px; padding:18px; border-radius:12px; text-align:center;
-  border:1px solid var(--line); background:#0a1011; transition:.3s;
+  border:1px solid var(--line); background:#0a1011;
+  transition:border-color .25s, box-shadow .25s, color .25s;
 }
-.ledbox .state { font-family:var(--mono); font-size:26px; font-weight:700;
-  letter-spacing:2px }
+.ledbox .state {
+  font-family:var(--mono); font-size:26px; font-weight:700;
+  letter-spacing:2px; transition:color .25s, opacity .15s;
+}
 .ledbox .sub { font-family:var(--mono); font-size:11px; color:var(--dim);
   letter-spacing:2px; text-transform:uppercase; margin-top:6px }
+
+/* pending: gentle border pulse while request is in-flight */
+.ledbox.pending { animation: ledpulse .7s ease-in-out infinite alternate; }
+@keyframes ledpulse {
+  from { opacity: 1; }
+  to   { opacity: .55; }
+}
+/* confirm pop: quick scale flash on server-confirmed state change */
+.ledbox.pop { animation: ledpop .28s ease-out; }
+@keyframes ledpop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
 .btns { display:flex; gap:12px }
 .btns button { margin-top:0 }
 .btn-on { background:var(--green); color:#04140c }
