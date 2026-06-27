@@ -11,8 +11,9 @@ device firmware that talks to it. A user logs into a web UI from anywhere on the
 internet and toggles an output on their physical device; the device polls the
 server and acts on the command.
 
-Today the controlled outputs are **three LEDs** (LED1=GPIO 33, LED2=GPIO 5,
-LED3=GPIO 17), each toggled independently. The architecture is deliberately
+Today the controlled outputs are **three logical LEDs**, each toggled
+independently. LED1 drives **five pins together** (GPIO 32/33/15/14/4), while
+LED2=GPIO 5 and LED3=GPIO 17 drive one pin each. The architecture is deliberately
 generic and is being expanded — the next target is controlling a **VTX (video
 transmitter)** in addition to / instead of the LEDs. When adding features,
 prefer generalizing the "command" the server stores per device over hardcoding
@@ -30,7 +31,7 @@ channel is authenticated in both directions.
   │ public/*.html│ ───────────▶ │ server.js (Express)│ ◀─────────── │ wt32_main.ino    │
   │ app.js       │  Bearer tok  │ db.js  (SQLite)    │  HMAC-signed │ polls /command   │
   │ admin.js     │              │                    │   GET /cmd   │ every 3s, drives │
-  └──────────────┘              └────────────────────┘              │ 3 LEDs (33/5/17) │
+  └──────────────┘              └────────────────────┘              │ 3 LEDs over ETH  │
                                                                     └──────────────────┘
 ```
 
@@ -62,6 +63,7 @@ ESP-32-Server/
     ├── wt32_main/         # ★ canonical firmware — hardened, serial-provisioned
     │   ├── wt32_main.ino
     │   └── ca_certs.h      # pinned root CA bundle (ISRG X1 + GTS R1/R4)
+    ├── wt32_eth_test/      # minimal Ethernet bring-up reference (ETH lib)
     ├── wt32_single_led_17/ # variant: single LED on GPIO 17
     ├── wt32_test/          # scratch/test sketch
     └── wt32_test_led_04/   # test sketch, LED on GPIO 04
@@ -147,22 +149,28 @@ Persistent Disk and point `DB_PATH` at it (then seeding runs only once).
 
 ## Device firmware (wt32/wt32_main)
 
-- Board: **WT32-ETH01** (ESP32). Despite the Ethernet hardware, the firmware uses
-  **WiFi** (GPIO 33/5/17 are free because RMII Ethernet is unused). Drives 3 LEDs.
+- Board: **WT32-ETH01** (ESP32). Networking is **wired Ethernet** (LAN8720A PHY
+  over RMII, brought up via the core `ETH` library); the WiFi radio is unused.
+  Three logical LEDs: **LED1 drives 5 pins together (GPIO 32/33/15/14/4)**, LED2=GPIO
+  5, LED3=GPIO 17 (all free because they aren't used by the RMII interface).
 - **Provisioning over serial @115200** (no hardcoded creds — one binary for all
-  devices). Send `SSID=`, `PASS=`, `ID=`, `SECRET=`, then `SAVE`. Stored in NVS
-  (survives reflash/power-cycle). Other commands: `SHOW`, `WIPE`, `HELP`.
+  devices). Send `ID=`, `SECRET=`, then `SAVE`. `SSID=`/`PASS=` are still accepted
+  and stored (so older WiFi-era provisioning tools keep working) but are **ignored
+  at runtime** and no longer required. Stored in NVS (survives reflash/power-cycle).
+  Other commands: `SHOW`, `WIPE`, `HELP`.
 - The 64-hex-char `SECRET` must match the server's `devices.secret` for that
   device (the admin register flow and `make-seed.js` both emit it).
-- When connected, each LED follows its own command (`led1/led2/led3`) and the
-  firmware logs all three on one line, e.g. `[LED1 - ON, LED2 - OFF, LED3 - ON]`.
-  Connectivity problems flash all 3 LEDs together: slow blink = no WiFi; medium
-  blink = no internet / awaiting NTP; fast blink = server unreachable; flutter =
-  provisioning.
+- When connected, each logical LED follows its own command (`led1/led2/led3`); a
+  change to `led1` switches all five of its pins in lockstep. The firmware logs all
+  three on one line, e.g. `[LED1 - ON, LED2 - OFF, LED3 - ON]`. Connectivity
+  problems flash every LED together: slow blink = no Ethernet link; medium blink =
+  no internet / awaiting NTP; fast blink = server unreachable; flutter = provisioning.
 - `SERVER_HOST` is a constant at the top of the `.ino` — update it if the Render
   URL changes. `ca_certs.h` must contain a root the server cert chains to.
 - Requires NTP-synced time (HMAC timestamps); won't sign requests until clock is valid.
-- Libraries: `ArduinoJson` (Library Manager); `Preferences` is built into the ESP32 core.
+- Libraries: `ArduinoJson` (Library Manager); `ETH`, `HTTPClient` and `Preferences`
+  are built into the ESP32 core. See `wt32/wt32_eth_test/` for a minimal Ethernet
+  bring-up reference.
 
 ## Roadmap: VTX <a id="roadmap-vtx"></a>
 
