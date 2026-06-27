@@ -149,7 +149,9 @@ app.get('/api/me', authUser, (req, res) => {
   res.json({
     username: req.username,
     deviceId: user.device_id,
-    led: !!dev.led,
+    led1: !!dev.led,
+    led2: !!dev.led2,
+    led3: !!dev.led3,
     online: Date.now() - dev.last_seen < 15000,
     lastSeen: dev.last_seen,
   });
@@ -158,9 +160,13 @@ app.get('/api/me', authUser, (req, res) => {
 app.post('/api/led', authUser, (req, res) => {
   const user = store.getUser(req.username);
   if (!user) return res.status(401).json({ error: 'unauthorized' });
+  const led = req.body && req.body.led;
+  if (led !== 1 && led !== 2 && led !== 3) {
+    return res.status(400).json({ error: 'led must be 1, 2 or 3' });
+  }
   const on = !!(req.body && req.body.on);
-  store.setLed(user.device_id, on);
-  res.json({ deviceId: user.device_id, led: on });
+  store.setLed(user.device_id, led, on);
+  res.json({ deviceId: user.device_id, led, on });
 });
 
 // ── Admin: auth middleware ────────────────────────────────────────
@@ -212,7 +218,9 @@ app.get('/api/admin/users', authAdmin, (_req, res) => {
   const rows = store.listUsersWithDevices().map((r) => ({
     username: r.username,
     deviceId: r.deviceId,
-    led: !!r.led,
+    led1: !!r.led,
+    led2: !!r.led2,
+    led3: !!r.led3,
     online: r.lastSeen ? (Date.now() - r.lastSeen < 15000) : false,
     lastSeen: r.lastSeen || 0,
   }));
@@ -315,7 +323,7 @@ app.get('/command', (req, res) => {
 
   seenNonces.set(nonce, Date.now() + NONCE_TTL);
   store.touchDevice(deviceId);
-  res.json({ led: !!dev.led });
+  res.json({ led1: !!dev.led, led2: !!dev.led2, led3: !!dev.led3 });
 });
 
 // ── Health check (used by Render and by the ESP's net check) ─────

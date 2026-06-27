@@ -32,15 +32,39 @@
   <div class="row"><span class="k">Connection</span>
     <span class="v"><span class="status-dot" id="dDot"></span><span id="dOnline">—</span></span></div>
 
-  <div class="ledbox" id="ledbox">
-    <div class="state" id="ledState">—</div>
-    <div class="sub">led signal</div>
+  <div class="led-unit">
+    <div class="ledbox" id="ledbox1">
+      <div class="state" id="ledState1">—</div>
+      <div class="sub">led 1 · io33</div>
+    </div>
+    <div class="btns">
+      <button class="btn-on" id="on1">On</button>
+      <button class="btn-off" id="off1">Off</button>
+    </div>
   </div>
 
-  <div class="btns">
-    <button class="btn-on" id="onBtn">Turn On</button>
-    <button class="btn-off" id="offBtn">Turn Off</button>
+  <div class="led-unit">
+    <div class="ledbox" id="ledbox2">
+      <div class="state" id="ledState2">—</div>
+      <div class="sub">led 2 · io5</div>
+    </div>
+    <div class="btns">
+      <button class="btn-on" id="on2">On</button>
+      <button class="btn-off" id="off2">Off</button>
+    </div>
   </div>
+
+  <div class="led-unit">
+    <div class="ledbox" id="ledbox3">
+      <div class="state" id="ledState3">—</div>
+      <div class="sub">led 3 · io17</div>
+    </div>
+    <div class="btns">
+      <button class="btn-on" id="on3">On</button>
+      <button class="btn-off" id="off3">Off</button>
+    </div>
+  </div>
+
   <button class="ghost" id="logoutBtn">Log out</button>
   <div class="err" id="dashErr"></div>
 </div>

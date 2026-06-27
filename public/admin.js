@@ -60,13 +60,16 @@ function renderUsers(list) {
     const row = document.createElement('div');
     row.className = 'urow';
     const dot = u.online ? 'var(--green)' : 'var(--red)';
-    const led = u.led ? 'ON' : 'OFF';
-    const ledColor = u.led ? 'var(--green)' : 'var(--dim)';
+    const badge = (n, on) =>
+      '<span class="ledbadge" style="color:' +
+      (on ? 'var(--green)' : 'var(--dim)') + '">' + n + (on ? '●' : '○') + '</span>';
     row.innerHTML =
       '<span class="udot" style="background:' + dot + '"></span>' +
       '<span class="uname"></span>' +
       '<span class="udev"></span>' +
-      '<span class="uled" style="color:' + ledColor + '">LED ' + led + '</span>' +
+      '<span class="uled">' +
+        badge(1, u.led1) + badge(2, u.led2) + badge(3, u.led3) +
+      '</span>' +
       '<span class="useen">' + fmtSeen(u.lastSeen) + '</span>';
     row.querySelector('.uname').textContent = u.username;
     row.querySelector('.udev').textContent = u.deviceId || '(none)';

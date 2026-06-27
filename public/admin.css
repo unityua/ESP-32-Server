@@ -74,7 +74,7 @@
 .user-list { display: flex; flex-direction: column; gap: 2px; }
 .urow {
   display: grid;
-  grid-template-columns: 16px 1.3fr 1fr 90px 80px;
+  grid-template-columns: 16px 1.3fr 1fr 110px 80px;
   align-items: center; gap: 10px;
   padding: 11px 8px; border-bottom: 1px solid var(--line);
   font-family: var(--mono); font-size: 13px;
@@ -83,12 +83,13 @@
 .udot { width: 9px; height: 9px; border-radius: 50%; }
 .uname { color: var(--txt); font-weight: 600; }
 .udev { color: var(--dim); }
-.uled { font-size: 12px; }
+.uled { font-size: 12px; display: flex; gap: 8px; }
+.ledbadge { white-space: nowrap; }
 .useen { color: var(--dim); font-size: 12px; text-align: right; }
 .empty { color: var(--dim); font-family: var(--mono); font-size: 13px; padding: 8px; }
 
 @media (max-width: 560px) {
   .reg-row { flex-direction: column; }
-  .urow { grid-template-columns: 14px 1fr 70px; }
+  .urow { grid-template-columns: 14px 1fr 110px; }
   .udev, .useen { display: none; }
 }

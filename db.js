@@ -34,7 +34,9 @@ db.exec(`
     device_id  TEXT PRIMARY KEY,
     secret     TEXT NOT NULL,          -- shared HMAC key (see README: protect this file!)
     owner      TEXT NOT NULL,
-    led        INTEGER NOT NULL DEFAULT 0,
+    led        INTEGER NOT NULL DEFAULT 0,   -- LED 1 (GPIO 33)
+    led2       INTEGER NOT NULL DEFAULT 0,   -- LED 2 (GPIO 5)
+    led3       INTEGER NOT NULL DEFAULT 0,   -- LED 3 (GPIO 17)
     last_seen  INTEGER NOT NULL DEFAULT 0
   );
 
@@ -44,6 +46,15 @@ db.exec(`
     expires    INTEGER NOT NULL
   );
 `);
+
+// ── Migration: add LED 2/3 columns to a pre-existing devices table ─
+// CREATE TABLE IF NOT EXISTS above won't alter an already-created table,
+// so on an upgrade we add the new columns if they're missing.
+{
+  const cols = db.prepare('PRAGMA table_info(devices)').all().map((c) => c.name);
+  if (!cols.includes('led2')) db.exec('ALTER TABLE devices ADD COLUMN led2 INTEGER NOT NULL DEFAULT 0');
+  if (!cols.includes('led3')) db.exec('ALTER TABLE devices ADD COLUMN led3 INTEGER NOT NULL DEFAULT 0');
+}
 
 // ── Seeding from environment (for Render's ephemeral disk) ────────
 // SEED_USERS is a JSON array, e.g.
@@ -99,7 +110,7 @@ module.exports = {
   listUsersWithDevices: () =>
     db.prepare(`
       SELECT u.username, u.device_id AS deviceId,
-             d.led, d.last_seen AS lastSeen, d.owner
+             d.led, d.led2, d.led3, d.last_seen AS lastSeen, d.owner
       FROM users u
       LEFT JOIN devices d ON d.device_id = u.device_id
       ORDER BY u.username
@@ -122,9 +133,12 @@ module.exports = {
     tx();
   },
 
-  setLed: (deviceId, on) =>
-    db.prepare('UPDATE devices SET led = ? WHERE device_id = ?')
-      .run(on ? 1 : 0, deviceId),
+  // n is 1, 2 or 3 — selects which LED column to write.
+  setLed: (deviceId, n, on) => {
+    const col = n === 2 ? 'led2' : n === 3 ? 'led3' : 'led';
+    return db.prepare(`UPDATE devices SET ${col} = ? WHERE device_id = ?`)
+      .run(on ? 1 : 0, deviceId);
+  },
 
   touchDevice: (deviceId) =>
     db.prepare('UPDATE devices SET last_seen = ? WHERE device_id = ?')

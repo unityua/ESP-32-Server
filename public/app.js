@@ -47,14 +47,17 @@ async function login() {
   }
 }
 
-function paintLed(led, online) {
-  const box = $('ledbox'), st = $('ledState');
+function paintLed(n, led) {
+  const box = $('ledbox' + n), st = $('ledState' + n);
   st.textContent = led ? 'ON' : 'OFF';
   box.style.borderColor = led ? 'var(--green)' : 'var(--blue)';
   box.style.boxShadow = led
     ? '0 0 32px rgba(61,220,145,.25) inset'
     : '0 0 32px rgba(77,139,255,.2) inset';
   st.style.color = led ? 'var(--green)' : 'var(--blue)';
+}
+
+function paintOnline(online) {
   const dot = $('dDot');
   dot.style.background = online ? 'var(--green)' : 'var(--red)';
   $('dOnline').textContent = online ? 'online' : 'offline';
@@ -65,13 +68,16 @@ async function refresh() {
     const m = await api('/api/me');
     $('dUser').textContent = m.username;
     $('dId').textContent = m.deviceId;
-    paintLed(m.led, m.online);
+    paintLed(1, m.led1);
+    paintLed(2, m.led2);
+    paintLed(3, m.led3);
+    paintOnline(m.online);
   } catch(e) { $('dashErr').textContent = e.message; }
 }
 
-async function setLed(on) {
+async function setLed(led, on) {
   $('dashErr').textContent = '';
-  try { await api('/api/led', {method:'POST', body: JSON.stringify({on})}); refresh(); }
+  try { await api('/api/led', {method:'POST', body: JSON.stringify({led, on})}); refresh(); }
   catch(e) { $('dashErr').textContent = e.message; }
 }
 
@@ -89,6 +95,8 @@ async function logout() {
 $('loginBtn').onclick = login;
 $('p').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 $('u').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-$('onBtn').onclick = () => setLed(true);
-$('offBtn').onclick = () => setLed(false);
+for (const n of [1, 2, 3]) {
+  $('on' + n).onclick = () => setLed(n, true);
+  $('off' + n).onclick = () => setLed(n, false);
+}
 $('logoutBtn').onclick = logout;

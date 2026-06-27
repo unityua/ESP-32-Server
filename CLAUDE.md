@@ -11,11 +11,12 @@ device firmware that talks to it. A user logs into a web UI from anywhere on the
 internet and toggles an output on their physical device; the device polls the
 server and acts on the command.
 
-Today the only controlled output is a single **LED**. The architecture is
-deliberately generic and is being expanded — the next target is controlling a
-**VTX (video transmitter)** in addition to / instead of the LED. When adding
-features, prefer generalizing the "command" the server stores per device over
-hardcoding LED-specific logic (see [Roadmap](#roadmap-vtx)).
+Today the controlled outputs are **three LEDs** (LED1=GPIO 33, LED2=GPIO 5,
+LED3=GPIO 17), each toggled independently. The architecture is deliberately
+generic and is being expanded — the next target is controlling a **VTX (video
+transmitter)** in addition to / instead of the LEDs. When adding features,
+prefer generalizing the "command" the server stores per device over hardcoding
+LED-specific logic (see [Roadmap](#roadmap-vtx)).
 
 The server is built to run on **Render** (`*.onrender.com`), which terminates
 TLS. The device pins public root CAs and verifies the server certificate, so the
@@ -29,7 +30,7 @@ channel is authenticated in both directions.
   │ public/*.html│ ───────────▶ │ server.js (Express)│ ◀─────────── │ wt32_main.ino    │
   │ app.js       │  Bearer tok  │ db.js  (SQLite)    │  HMAC-signed │ polls /command   │
   │ admin.js     │              │                    │   GET /cmd   │ every 3s, drives │
-  └──────────────┘              └────────────────────┘              │ LED on GPIO 17   │
+  └──────────────┘              └────────────────────┘              │ 3 LEDs (33/5/17) │
                                                                     └──────────────────┘
 ```
 
@@ -95,11 +96,14 @@ experiments/variants; don't treat them as authoritative.
 ## Data model (SQLite)
 
 - `users`   — `username` (PK), `password_hash`, `device_id` (unique). One device per user.
-- `devices` — `device_id` (PK), `secret` (HMAC key), `owner`, `led` (desired state), `last_seen`.
+- `devices` — `device_id` (PK), `secret` (HMAC key), `owner`, `led`/`led2`/`led3`
+  (desired state of LED 1/2/3), `last_seen`.
 - `sessions`— `token_hash` (sha256 of bearer token), `username`, `expires`.
 
-> Note: `devices.led` is the current "command" column. When generalizing to VTX,
-> this is the field that grows (e.g. add columns or a JSON state blob).
+> Note: `devices.led`/`led2`/`led3` are the current "command" columns (LED 1/2/3;
+> `led` is LED 1, kept for backward compat). `db.js` migrates older single-`led`
+> tables by `ALTER TABLE ADD COLUMN`. When generalizing to VTX, these are the
+> fields that grow (e.g. more columns or a JSON state blob).
 
 ## API surface
 
@@ -107,13 +111,13 @@ experiments/variants; don't treat them as authoritative.
 |--------|-----------------------|-------------|-------------------------------------------|
 | POST   | `/api/login`          | none (RL)   | user login → bearer token                 |
 | POST   | `/api/logout`         | user        | invalidate session                        |
-| GET    | `/api/me`             | user        | device state (led, online, lastSeen)      |
-| POST   | `/api/led`            | user        | set desired LED state `{on: bool}`        |
+| GET    | `/api/me`             | user        | device state (`led1/led2/led3`, online, lastSeen) |
+| POST   | `/api/led`            | user        | set one LED `{led: 1\|2\|3, on: bool}`     |
 | POST   | `/api/admin/login`    | none (RL)   | admin login (needs `ADMIN_PASSWORD`)      |
 | POST   | `/api/admin/logout`   | admin       | invalidate admin session                  |
 | GET    | `/api/admin/users`    | admin       | list all users + device status            |
 | POST   | `/api/admin/register` | admin       | create user+device, returns secret **once** |
-| GET    | `/command`            | HMAC sig    | device poll → `{led: bool}`               |
+| GET    | `/command`            | HMAC sig    | device poll → `{led1, led2, led3}` (bools) |
 | GET    | `/health`             | none        | health check (Render + device net probe)  |
 
 `online` is derived: `Date.now() - last_seen < 15000` (device polls every 3s).
@@ -144,15 +148,17 @@ Persistent Disk and point `DB_PATH` at it (then seeding runs only once).
 ## Device firmware (wt32/wt32_main)
 
 - Board: **WT32-ETH01** (ESP32). Despite the Ethernet hardware, the firmware uses
-  **WiFi** (GPIO 17 is free because RMII Ethernet is unused).
+  **WiFi** (GPIO 33/5/17 are free because RMII Ethernet is unused). Drives 3 LEDs.
 - **Provisioning over serial @115200** (no hardcoded creds — one binary for all
   devices). Send `SSID=`, `PASS=`, `ID=`, `SECRET=`, then `SAVE`. Stored in NVS
   (survives reflash/power-cycle). Other commands: `SHOW`, `WIPE`, `HELP`.
 - The 64-hex-char `SECRET` must match the server's `devices.secret` for that
   device (the admin register flow and `make-seed.js` both emit it).
-- LED status encodes connectivity: solid = command state; slow blink = no WiFi;
-  medium blink = no internet / awaiting NTP; fast blink = server unreachable;
-  flutter = provisioning.
+- When connected, each LED follows its own command (`led1/led2/led3`) and the
+  firmware logs all three on one line, e.g. `[LED1 - ON, LED2 - OFF, LED3 - ON]`.
+  Connectivity problems flash all 3 LEDs together: slow blink = no WiFi; medium
+  blink = no internet / awaiting NTP; fast blink = server unreachable; flutter =
+  provisioning.
 - `SERVER_HOST` is a constant at the top of the `.ino` — update it if the Render
   URL changes. `ca_certs.h` must contain a root the server cert chains to.
 - Requires NTP-synced time (HMAC timestamps); won't sign requests until clock is valid.
