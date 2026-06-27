@@ -2,3 +2,7 @@ node_modules/
 data.sqlite
 data.sqlite-*
 .env
+
+# ESP32 firmware sketches
+wt32/
+
